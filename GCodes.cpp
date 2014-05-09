@@ -1285,8 +1285,8 @@ void GCodes::AddNewTool(GCodeBuffer *gb)
 
 	int toolNumber = gb->GetLValue();
 
-	long drives[DRIVES];  // There can never be more than we have...
-	int dCount = DRIVES;  // Sets the limit and returns the count
+	long drives[DRIVES - AXES];  // There can never be more than we have...
+	int dCount = DRIVES - AXES;  // Sets the limit and returns the count
 	if(gb->Seen('D'))
 		gb->GetLongArray(drives, dCount);
 
@@ -1374,6 +1374,46 @@ void GCodes::SetEthernetAddress(GCodeBuffer *gb, int mCode)
 		platform->Message(HOST_MESSAGE, gb->Buffer());
 		platform->Message(HOST_MESSAGE, "\n");
 	}
+}
+
+
+void GCodes::SetMACAddress(GCodeBuffer *gb)
+{
+	u8_t mac[6];
+	const char* ipString = gb->GetString();
+	uint8_t sp = 0;
+	uint8_t spp = 0;
+	uint8_t ipp = 0;
+	while(ipString[sp])
+	{
+		if(ipString[sp] == ':')
+		{
+			mac[ipp] = strtol(&ipString[spp], NULL, 0);
+			ipp++;
+			if(ipp > 5)
+			{
+				platform->Message(HOST_MESSAGE, "Dud MAC address: ");
+				platform->Message(HOST_MESSAGE, gb->Buffer());
+				platform->Message(HOST_MESSAGE, "\n");
+				return;
+			}
+			sp++;
+			spp = sp;
+		}else
+			sp++;
+	}
+	mac[ipp] = strtol(&ipString[spp], NULL, 0);
+	if(ipp == 5)
+	{
+		platform->SetMACAddress(mac);
+	} else
+	{
+		platform->Message(HOST_MESSAGE, "Dud MAC address: ");
+		platform->Message(HOST_MESSAGE, gb->Buffer());
+		platform->Message(HOST_MESSAGE, "\n");
+	}
+//	snprintf(scratchString, STRING_LENGTH, "MAC: %x:%x:%x:%x:%x:%x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+//	platform->Message(HOST_MESSAGE, scratchString);
 }
 
 void GCodes::HandleReply(bool error, bool fromLine, const char* reply, char gMOrT, int code, bool resend)
@@ -1769,7 +1809,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	break;
 
     case 112: // Emergency stop - acted upon in Webserver, but also here in case it comes from USB etc.
-    		reprap.EmergencyStop();
+    	reprap.EmergencyStop();
     	break;
 
     case 114: // Deprecated
@@ -1843,13 +1883,14 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       platform->Message(HOST_MESSAGE, "M141 - heated chamber not yet implemented\n");
       break;
 
-    case 160: //number of mixing filament drives
+    case 160: //number of mixing filament drives  TODO: With tools defined, is this needed?
     	if(gb->Seen('S'))
 		{
 			int iValue=gb->GetIValue();
 			platform->SetMixingDrives(iValue);
 		}
 		break;
+
     case 190: // Deprecated...
     	if(gb->Seen('S'))
     	{
@@ -1950,7 +1991,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     case 205:  //M205 advanced settings:  minimum travel speed S=while printing T=travel only,  B=minimum segment time X= maximum xy jerk, Z=maximum Z jerk
     	break;
 
-    case 206:  // Offset axes
+    case 206:  // Offset axes - Depricated
     	result = OffsetAxes(gb);
     	break;
 
@@ -1978,6 +2019,11 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 
     case 301: // Set hot end PID values
     	{
+    		if(!gb->Seen('H')) // Must specify the heater
+    			break;
+
+    		int8_t heater = gb->GetIValue();
+
     		float pValue, iValue, dValue;
     		bool seen = false;
     		if (gb->Seen('P'))
@@ -2010,11 +2056,11 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 
     		if (seen)
     		{
-    			platform->SetPidValues(1, pValue, iValue, dValue);
+    			platform->SetPidValues(heater, pValue, iValue, dValue);
     		}
     		else
     		{
-        		snprintf(reply, STRING_LENGTH, "P:%f I:%f D: %f\n", pValue, iValue, dValue);
+        		snprintf(reply, STRING_LENGTH, "Heater %d - P:%f I:%f D: %f\n", heater, pValue, iValue, dValue);
     		}
     	}
     	break;
@@ -2027,6 +2073,11 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 
     case 503: // list variable settings
     	result = SendConfigToLine();
+    	break;
+
+    case 540:
+    	if(gb->Seen('P'))
+    	    SetMACAddress(gb);
     	break;
 
     case 550: // Set machine name
@@ -2102,7 +2153,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	}
     	else
     	{
-    		snprintf(reply, STRING_LENGTH, "%d", platform->GetZProbeType());
+    		snprintf(reply, STRING_LENGTH, "Z Probe: %d", platform->GetZProbeType());
     	}
     	break;
 
@@ -2179,6 +2230,9 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	    resend = true;
     	}
     	break;
+
+    case 999: // Reset. FIXME: Implement this?
+    	break;
      
     default:
       error = true;
@@ -2212,14 +2266,12 @@ bool GCodes::ChangeTool(int newToolNumber)
     Tool* oldTool = reprap.GetCurrentTool();
     Tool* newTool = reprap.GetTool(newToolNumber);
 
-    // If old and new are the same at the start, do nothing
-
-    if(oldTool == newTool && toolChangeSequence == 0)
-    	return true;
+    // If old and new are the same still follow the sequence -
+    // The user may want the macros run.
 
     switch(toolChangeSequence)
     {
-    case 0: // Release the old tool (if any)
+    case 0: // Pre-release sequence for the old tool (if any)
     	if(oldTool != NULL)
     	{
     		snprintf(scratchString, STRING_LENGTH, "tfree%d.g", oldTool->Number());
@@ -2229,7 +2281,13 @@ bool GCodes::ChangeTool(int newToolNumber)
     		toolChangeSequence++;
     	return false;
 
-    case 1: // Run the pre-tool-change canned cycle for the new tool (if any)
+    case 1: // Release the old tool (if any)
+    	if(oldTool != NULL)
+    		reprap.StandbyTool(oldTool->Number());
+    	toolChangeSequence++;
+    	return false;
+
+    case 2: // Run the pre-tool-change canned cycle for the new tool (if any)
     	if(newTool != NULL)
     	{
     		snprintf(scratchString, STRING_LENGTH, "tpre%d.g", newToolNumber);
@@ -2239,12 +2297,12 @@ bool GCodes::ChangeTool(int newToolNumber)
     		toolChangeSequence++;
     	return false;
 
-    case 2: // Select the new tool (even if it doesn't exist - that just deselects all tools)
+    case 3: // Select the new tool (even if it doesn't exist - that just deselects all tools)
     	reprap.SelectTool(newToolNumber);
    		toolChangeSequence++;
     	return false;
 
-    case 3: // Run the post-tool-change canned cycle for the new tool (if any)
+    case 4: // Run the post-tool-change canned cycle for the new tool (if any)
     	if(newTool != NULL)
     	{
     		snprintf(scratchString, STRING_LENGTH, "tpost%d.g", newToolNumber);
@@ -2254,7 +2312,7 @@ bool GCodes::ChangeTool(int newToolNumber)
     		toolChangeSequence++;
     	return false;
 
-    case 4:
+    case 5: // All done
     	toolChangeSequence = 0;
     	return true;
 
