@@ -61,10 +61,10 @@
 #define LWIP_NETIF_STATUS_CALLBACK	1
 
 /* These options can be configured by the user in the standalone demo default demo */
-#define HTTP_RAW_USED
+//#define HTTP_RAW_USED
 // #undef HTTP_RAW_USED
-//#define DHCP_USED
- #undef DHCP_USED
+#define DHCP_USED					1
+// #undef DHCP_USED
 
 
 /* These are not available when using "NO_SYS" */
@@ -104,7 +104,7 @@ a lot of data that needs to be copied, this should be set high. */
 #define MEMP_NUM_UDP_PCB        4
 
 /* MEMP_NUM_TCP_PCB: the number of simultaneously active TCP connections. */
-#define MEMP_NUM_TCP_PCB        2
+#define MEMP_NUM_TCP_PCB        6
 /* MEMP_NUM_TCP_PCB_LISTEN: the number of listening TCP connections. */
 #define MEMP_NUM_TCP_PCB_LISTEN 1
 /* MEMP_NUM_TCP_SEG: the number of simultaneously queued TCP segments. */

@@ -33,11 +33,13 @@ Licence: GPL
 
 #define KO_START "rr_"
 #define KO_FIRST 3
-#define POST_LENGTH				(1300)			// max amount of POST data we can accept
 
+const unsigned int postLength = 1400;			// max amount of POST data we can accept
+const unsigned int webInputLength = 1400;		// max size of web interface requests and related stuff
 const unsigned int gcodeBufLength = 2048;		// size of our gcode ring buffer, ideally a power of 2
 const unsigned int minReportedFreeBuf = 100;	// the minimum free buffer we report if not zero
-const unsigned int maxReportedFreeBuf = 900;	// the max we own up to having free, to avoid overlong messages
+const unsigned int maxReportedFreeBuf = 1024;	// the max we own up to having free, to avoid overlong messages
+const unsigned int jsopnReplyLength = 1200;		// size of buffer used to hold JSON reply
 
 class Webserver
 {   
@@ -53,7 +55,6 @@ class Webserver
     void Diagnostics();
     void SetPassword(const char* pw);
     void SetName(const char* nm);
-    void ConnectionError();
     void HandleReply(const char *s, bool error);
     void AppendReply(const char* s);
 
@@ -61,15 +62,14 @@ class Webserver
   
     void ParseClientLine();
     void SendFile(const char* nameOfFileToSend);
-    bool WriteBytes();
     void ParseQualifier();
     void CheckPassword();
-    void LoadGcodeBuffer(const char* gc, bool convertWeb);
-    void CloseClient();
+    void LoadGcodeBuffer(const char* gc);
     bool PrintHeadString();
     bool PrintLinkTable();
     void GetGCodeList();
     void GetJsonResponse(const char* request);
+    void GetStatusResponse(uint8_t type);
     void ParseGetPost();
     bool CharFromClient(char c);
     void BlankLineFromClient();
@@ -79,37 +79,35 @@ class Webserver
     unsigned int GetGcodeBufferSpace() const;
     unsigned int GetReportedGcodeBufferSpace() const;
     void ProcessGcode(const char* gc);
+    bool GetFileInfo(const char *fileName, unsigned long& length, float& height, float& filamentUsed);
+    static bool FindHeight(const char* buf, size_t len, float& height);
+    static bool FindFilamentUsed(const char* buf, size_t len, float& filamentUsed);
 
     Platform* platform;
     bool active;
     float lastTime;
     float longWait;
-    FileStore* fileBeingSent;
-    bool writing;
     bool receivingPost;
-    char postBoundary[POST_LENGTH];
+    char postBoundary[postLength];
     int boundaryCount;  
-    char postFileName[POST_LENGTH];
+    char postFileName[postLength];
     FileStore* postFile;
     bool postSeen;
     bool getSeen;
     bool clientLineIsBlank;
-    float clientCloseTime;
-    bool needToCloseClient;
 
-    char clientLine[STRING_LENGTH+2];	// 2 chars extra so we can append \n\0
-    char clientRequest[STRING_LENGTH];
-    char clientQualifier[STRING_LENGTH];
-    char jsonResponse[STRING_LENGTH+1];
+    char clientLine[webInputLength];
+    char clientRequest[webInputLength];
+    char clientQualifier[webInputLength];
+    char jsonResponse[jsopnReplyLength];
     char gcodeBuffer[gcodeBufLength];
     unsigned int gcodeReadIndex, gcodeWriteIndex;		// head and tail indices into gcodeBuffer
-    int jsonPointer;
     int clientLinePointer;
     bool gotPassword;
     char password[SHORT_STRING_LENGTH+1];
     char myName[SHORT_STRING_LENGTH+1];
     char gcodeReply[STRING_LENGTH+1];
-    uint16_t seq;	// reply sequence number, so that the client can tell if a reply is new or not
+    uint16_t seq;	// reply sequence number, so that the client can tell if a json reply is new or not
 };
 
 
