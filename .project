@@ -70,15 +70,19 @@
 	<variableList>
 		<variable>
 			<name>ArduinoHardwareLibPath</name>
-			<value>file:/usr/local/arduino-1.5.4/hardware/arduino/sam/libraries</value>
+			<value>file:/C:/Program%20Files%20(x86)/Arduino/hardware/arduino/sam/libraries</value>
 		</variable>
 		<variable>
 			<name>ArduinoPinPath</name>
-			<value>file:/usr/local/arduino-1.5.4/hardware/arduino/sam/variants</value>
+			<value>file:/C:/Program%20Files%20(x86)/Arduino/hardware/arduino/sam/variants</value>
+		</variable>
+		<variable>
+			<name>ArduinoPivateLibPath</name>
+			<value>file:/F:/eclipseArduino/Arduino-libraries-master</value>
 		</variable>
 		<variable>
 			<name>ArduinoPlatformPath</name>
-			<value>file:/usr/local/arduino-1.5.4/hardware/arduino/sam</value>
+			<value>file:/C:/Program%20Files%20(x86)/Arduino/hardware/arduino/sam</value>
 		</variable>
 	</variableList>
 </projectDescription>

@@ -256,7 +256,7 @@ environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.S
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.SIZE_COMMAND/value="${A.COMPILER.PATH}${A.COMPILER.SIZE.CMD}" --format\=avr --mcu\=${A.BUILD.MCU} "${A.BUILD.PATH}/${A.BUILD.PROJECT_NAME}.elf"
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/PATH/delimiter=\:
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/PATH/operation=replace
-environment/project/it.baeyens.arduino.core.toolChain.release.674980254/PATH/value=${A.COMPILER.PATH}${PathDelimiter}${A.BUILD.GENERIC.PATH}${PathDelimiter}${PATH}
+environment/project/it.baeyens.arduino.core.toolChain.release.674980254/PATH/value=${A.COMPILER.PATH}${PathDelimiter}${A.BUILD.GENERIC.PATH}${PathDelimiter}${PATH};C\:\\Program Files (x86)\\GnuWin32\\bin
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/append=true
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/appendContributed=true
 indexer/indexAllFiles=true
