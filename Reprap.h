@@ -32,6 +32,7 @@ class RepRap
     void Exit();
     void Interrupt();
     void Diagnostics();
+    void Timing();
     bool Debug() const;
     void SetDebug(bool d);
     void AddTool(Tool* t);
@@ -40,6 +41,12 @@ class RepRap
     Tool* GetCurrentTool();
     Tool* GetTool(int toolNumber);
     void SetToolVariables(int toolNumber, float* standbyTemperatures, float* activeTemperatures);
+    void AllowColdExtrude();
+    void DenyColdExtrude();
+    bool ColdExtrude();
+    void PrintTool(int toolNumber, char* reply);
+	void FlagTemperatureFault(int8_t dudHeater);
+	void ClearTemperatureFault(int8_t wasDudHeater);
     Platform* GetPlatform() const;
     Move* GetMove() const;
     Heat* GetHeat() const;
@@ -59,6 +66,7 @@ class RepRap
     bool debug;
     float fastLoop, slowLoop;
     float lastTime;
+    bool coldExtrude;
 };
 
 inline Platform* RepRap::GetPlatform() const { return platform; }
@@ -68,19 +76,33 @@ inline GCodes* RepRap::GetGCodes() const { return gCodes; }
 inline Webserver* RepRap::GetWebserver() const { return webserver; }
 inline bool RepRap::Debug() const { return debug; }
 inline Tool* RepRap::GetCurrentTool() { return currentTool; }
+inline bool RepRap::ColdExtrude() { return coldExtrude; }
+inline void RepRap::AllowColdExtrude() { coldExtrude = true; }
+
+inline void RepRap::FlagTemperatureFault(int8_t dudHeater)
+{
+	if(toolList != NULL)
+		toolList->FlagTemperatureFault(dudHeater);
+}
+
+inline void RepRap::ClearTemperatureFault(int8_t wasDudHeater)
+{
+	reprap.GetHeat()->ResetFault(wasDudHeater);
+	if(toolList != NULL)
+		toolList->ClearTemperatureFault(wasDudHeater);
+}
 
 inline void RepRap::SetDebug(bool d)
 {
 	debug = d;
 	if(debug)
 	{
-		platform->Message(HOST_MESSAGE, "Debugging enabled\n");
-		webserver->HandleReply("Debugging enabled\n", false);
+		platform->Message(BOTH_MESSAGE, "Debugging enabled\n");
 		platform->PrintMemoryUsage();
 	}
 	else
 	{
-		webserver->HandleReply("", false);
+		platform->Message(WEB_MESSAGE, "");
 	}
 }
 

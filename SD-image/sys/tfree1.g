@@ -1,3 +1,3 @@
-; Test - put tool deselect G Codes in here
-M105
+; tfree1.g
+; Put G/M Codes in here to run when Tool 1 is freed
 

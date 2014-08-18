@@ -1,3 +1,3 @@
-; Test - put tool pre-select G Codes in here
-M114
+; tpre1.g
+; Put G/M Codes in here to run before Tool 1 is selected
 

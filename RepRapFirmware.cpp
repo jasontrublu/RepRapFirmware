@@ -177,19 +177,28 @@ void RepRap::Init()
   heat->Init();
   currentTool = NULL;
   active = true;
+  coldExtrude = false;
 
-  platform->Message(HOST_MESSAGE, NAME);
-  platform->Message(HOST_MESSAGE, " Version ");
-  platform->Message(HOST_MESSAGE, VERSION);
-  platform->Message(HOST_MESSAGE, ", dated ");
-  platform->Message(HOST_MESSAGE, DATE);
-  platform->Message(HOST_MESSAGE, ".\n\nExecuting ");
-  platform->Message(HOST_MESSAGE, platform->GetConfigFile());
-  platform->Message(HOST_MESSAGE, "...\n\n");
+  snprintf(scratchString, STRING_LENGTH, "%s Version %s dated %s\n", NAME, VERSION, DATE);
+  platform->Message(HOST_MESSAGE, scratchString);
 
+  FileStore* startup = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
+
+  platform->Message(HOST_MESSAGE, "\n\nExecuting ");
+  if(startup != NULL)
+  {
+	  startup->Close();
+	  platform->Message(HOST_MESSAGE, platform->GetConfigFile());
+	  platform->Message(HOST_MESSAGE, "...\n\n");
+	  snprintf(scratchString, STRING_LENGTH, "M98 P%s\n", platform->GetConfigFile());
+  } else
+  {
+	  platform->Message(HOST_MESSAGE, platform->GetDefaultFile());
+	  platform->Message(HOST_MESSAGE, " (no configuration file found)...\n\n");
+	  snprintf(scratchString, STRING_LENGTH, "M98 P%s\n", platform->GetDefaultFile());
+  }
   // We inject an M98 into the serial input stream to run the start-up macro
 
-  snprintf(scratchString, STRING_LENGTH, "M98 P%s\n", platform->GetConfigFile());
   platform->GetLine()->InjectString(scratchString);
 
   bool runningTheFile = false;
@@ -206,15 +215,11 @@ void RepRap::Init()
 	  }
   }
 
-
-  //while(gCodes->RunConfigurationGCodes()); // Wait till the file is finished
-
   platform->Message(HOST_MESSAGE, "\nStarting network...\n");
   platform->StartNetwork(); // Need to do this here, as the configuration GCodes may set IP address etc.
 
-  platform->Message(HOST_MESSAGE, "\n");
-  platform->Message(HOST_MESSAGE, NAME);
-  platform->Message(HOST_MESSAGE, " is up and running.\n");
+  snprintf(scratchString, STRING_LENGTH, "\n%s is up and running.\n", NAME);
+  platform->Message(HOST_MESSAGE, scratchString);
   fastLoop = FLT_MAX;
   slowLoop = 0.0;
   lastTime = platform->Time();
@@ -253,6 +258,14 @@ void RepRap::Spin()
   lastTime = t;
 }
 
+void RepRap::Timing()
+{
+	snprintf(scratchString, STRING_LENGTH, "Slowest main loop (seconds): %f; fastest: %f\n", slowLoop, fastLoop);
+	platform->AppendMessage(BOTH_MESSAGE, scratchString);
+	fastLoop = FLT_MAX;
+	slowLoop = 0.0;
+}
+
 void RepRap::Diagnostics()
 {
   platform->Diagnostics();
@@ -260,10 +273,7 @@ void RepRap::Diagnostics()
   heat->Diagnostics();
   gCodes->Diagnostics();
   webserver->Diagnostics();
-  snprintf(scratchString, STRING_LENGTH, "Slow loop secs: %f; fast: %f\n", slowLoop, fastLoop);
-  platform->Message(HOST_MESSAGE, scratchString);
-  fastLoop = FLT_MAX;
-  slowLoop = 0.0;
+  Timing();
 }
 
 // Turn off the heaters, disable the motors, and
@@ -299,19 +309,40 @@ void RepRap::EmergencyStop()
 		}
 	}
 
-	platform->Message(HOST_MESSAGE, "Emergency Stop! Reset the controller to continue.");
-	webserver->HandleReply("Emergency Stop! Reset the controller to continue.", false);
+	platform->Message(BOTH_MESSAGE, "Emergency Stop! Reset the controller to continue.");
 }
+
+/*
+ * The first tool added becomes the one selected.  This will not happen in future releases.
+ */
 
 void RepRap::AddTool(Tool* tool)
 {
 	if(toolList == NULL)
 	{
 		toolList = tool;
+		currentTool = tool;
+		tool->Activate(currentTool);
 		return;
 	}
 
 	toolList->AddTool(tool);
+}
+
+void RepRap::PrintTool(int toolNumber, char* reply)
+{
+	Tool* tool = toolList;
+
+	while(tool)
+	{
+		if(tool->Number() == toolNumber)
+		{
+			tool->Print(reply);
+			return;
+		}
+		tool = tool->Next();
+	}
+	platform->Message(HOST_MESSAGE, "Attempt to print details of non-existent tool.");
 }
 
 void RepRap::SelectTool(int toolNumber)
@@ -334,7 +365,6 @@ void RepRap::SelectTool(int toolNumber)
 	if(currentTool != NULL)
 		StandbyTool(currentTool->Number());
 	currentTool = NULL;
-
 }
 
 void RepRap::StandbyTool(int toolNumber)
@@ -398,29 +428,7 @@ void RepRap::SetToolVariables(int toolNumber, float* standbyTemperatures, float*
 // Utilities and storage not part of any class
 
 
-// Float to a string.
-
-static long precision[] = {0,10,100,1000,10000,100000,1000000,10000000,100000000};
 char scratchString[STRING_LENGTH];
-
-char* ftoa(char *a, const float& f, int prec)
-{
-  if(a == NULL)
-    a = scratchString;
-  char *ret = a;
-  long whole = (long)f;
-  if(!whole && f < 0.0)
-  {
-	  a[0] = '-';
-	  a++;
-  }
-  snprintf(a, STRING_LENGTH, "%d", whole);
-  while (*a != '\0') a++;
-  *a++ = '.';
-  long decimal = abs((long)((f - (float)whole) * precision[prec]));
-  snprintf(a, STRING_LENGTH, "%0*d", prec, decimal);
-  return ret;
-}
 
 // String testing
 

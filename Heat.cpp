@@ -68,24 +68,9 @@ void Heat::Diagnostics()
 
 bool Heat::AllHeatersAtSetTemperatures()
 {
-	float dt;
 	for(int8_t heater = 0; heater < HEATERS; heater++)
 	{
-		dt = GetTemperature(heater);
-		if(pids[heater]->Active())
-		{
-			if(GetActiveTemperature(heater) < TEMPERATURE_LOW_SO_DONT_CARE)
-				dt = 0.0;
-			else
-				dt = fabs(dt - GetActiveTemperature(heater));
-		} else
-		{
-			if(GetStandbyTemperature(heater) < TEMPERATURE_LOW_SO_DONT_CARE)
-				dt = 0.0;
-			else
-				dt = fabs(dt - GetStandbyTemperature(heater));
-		}
-		if(dt > TEMPERATURE_CLOSE_ENOUGH)
+		if(!HeaterAtSetTemperature(heater))
 			return false;
 	}
 	return true;
@@ -95,8 +80,10 @@ bool Heat::AllHeatersAtSetTemperatures()
 
 bool Heat::HeaterAtSetTemperature(int8_t heater)
 {
-	float dt;
-	dt = GetTemperature(heater);
+	if(pids[heater]->SwitchedOff())  // If it hasn't anything to do, it must be right wherever it is...
+		return true;
+
+	float dt = GetTemperature(heater);
 	if(pids[heater]->Active())
 	{
 		if(GetActiveTemperature(heater) < TEMPERATURE_LOW_SO_DONT_CARE)
@@ -136,6 +123,17 @@ void PID::Init()
   temperatureFault = false;
   active = false; 		// Default to standby temperature
   switchedOff = true;
+  heatingUp = false;
+}
+
+void PID::SwitchOn()
+{
+//	if(reprap.Debug())
+//	{
+//		snprintf(scratchString, STRING_LENGTH, "Heater %d switched on.\n", heater);
+//		platform->Message(BOTH_MESSAGE, scratchString);
+//	}
+	switchedOff = false;
 }
 
 
@@ -157,7 +155,8 @@ void PID::Spin()
 	  return;
   }
 
-  // We are switched on.  Check for faults.
+  // We are switched on.  Check for faults.  Temperature silly-low or silly-high mean open-circuit
+  // or shorted thermistor respectively.
 
   if(temperature < BAD_LOW_TEMPERATURE || temperature > BAD_HIGH_TEMPERATURE)
   {
@@ -166,16 +165,39 @@ void PID::Spin()
 	  {
 		  platform->SetHeater(heater, 0.0);
 		  temperatureFault = true;
-		  platform->Message(HOST_MESSAGE, "Temperature measurement fault on heater ");
-		  snprintf(scratchString, STRING_LENGTH, "%d", heater);
+		  switchedOff = true;
+		  snprintf(scratchString, STRING_LENGTH, "Temperature fault on heater %d, T = %.1f C\n", heater, temperature);
 		  platform->Message(HOST_MESSAGE, scratchString);
-		  platform->Message(HOST_MESSAGE, ", T = ");
-		  platform->Message(HOST_MESSAGE, ftoa(scratchString, temperature, 1));
-		  platform->Message(HOST_MESSAGE, "\n");
+		  reprap.FlagTemperatureFault(heater);
 	  }
   } else
   {
 	  badTemperatureCount = 0;
+  }
+
+  // Now check how long it takes to warm up.  If too long, maybe the thermistor is not in contact with the heater
+
+  if(heatingUp && heater != HOT_BED) // FIXME - also check bed warmup time?
+  {
+	  float tmp = standbyTemperature;
+	  if(active)
+		  tmp = activeTemperature;
+	  tmp -= TEMPERATURE_CLOSE_ENOUGH;
+	  if(temperature < tmp)
+	  {
+		  float tim = platform->Time() - timeSetHeating;
+		  if(tim > TIME_TO_HOT)
+		  {
+			  platform->SetHeater(heater, 0.0);
+			  temperatureFault = true;
+			  switchedOff = true;
+			  snprintf(scratchString, STRING_LENGTH, "Heating fault on heater %d, T = %.1f C; still not at temperature after %f seconds.\n",
+					  heater, temperature, tim);
+			  platform->Message(HOST_MESSAGE, scratchString);
+			  reprap.FlagTemperatureFault(heater);
+		  }
+	  } else
+		  heatingUp = false;
   }
 
   float error = ((active) ? activeTemperature : standbyTemperature) - temperature;

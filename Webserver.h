@@ -53,9 +53,17 @@ class Webserver
     void Diagnostics();
     void SetPassword(const char* pw);
     void SetName(const char* nm);
+    const char* GetName() const;
     void ConnectionError();
-    void HandleReply(const char *s, bool error);
-    void AppendReply(const char* s);
+    void WebDebug(bool wdb);
+    bool PasswordGiven();
+
+    friend class Platform;
+
+  protected:
+
+    void MessageStringToWebInterface(const char *s, bool error);
+    void AppendReplyToWebInterface(const char* s, bool error);
 
   private:
   
@@ -110,6 +118,7 @@ class Webserver
     char myName[SHORT_STRING_LENGTH+1];
     char gcodeReply[STRING_LENGTH+1];
     uint16_t seq;	// reply sequence number, so that the client can tell if a reply is new or not
+    bool webDebug;
 };
 
 

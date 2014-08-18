@@ -92,6 +92,7 @@ void Platform::Init()
   mcpExpansion.setMCP4461Address(0x2E); //not required for mcpDuet, as this uses the default address
   sysDir = SYS_DIR;
   configFile = CONFIG_FILE;
+  defaultFile = DEFAULT_FILE;
 
   ipAddress = IP_ADDRESS;
   netMask = NET_MASK;
@@ -102,6 +103,7 @@ void Platform::Init()
 
   stepPins = STEP_PINS;
   directionPins = DIRECTION_PINS;
+  directions = DIRECTIONS;
   enablePins = ENABLE_PINS;
   disableDrives = DISABLE_DRIVES;
   lowStopPins = LOW_STOP_PINS;
@@ -130,13 +132,15 @@ void Platform::Init()
   homeFeedrates = HOME_FEEDRATES;
   headOffsets = HEAD_OFFSETS;
 
+  SetSlowestDrive();
+
   // HEATERS - Bed is assumed to be the first
 
   tempSensePins = TEMP_SENSE_PINS;
   heatOnPins = HEAT_ON_PINS;
   thermistorBetas = THERMISTOR_BETAS;
   thermistorSeriesRs = THERMISTOR_SERIES_RS;
-  thermistorInfRs = THERMISTOR_25_RS;
+  thermistorRAt25 = THERMISTOR_25_RS;
   usePID = USE_PID;
   pidKis = PID_KIS;
   pidKds = PID_KDS;
@@ -149,6 +153,7 @@ void Platform::Init()
   standbyTemperatures = STANDBY_TEMPERATURES;
   activeTemperatures = ACTIVE_TEMPERATURES;
   coolingFanPin = COOLING_FAN_PIN;
+  timeToHot = TIME_TO_HOT;
   //turnHeatOn = HEAT_ON;
 
   webDir = WEB_DIR;
@@ -207,7 +212,7 @@ void Platform::Init()
     		pinModeNonDue(heatOnPins[i], OUTPUT);
     	else
     		pinMode(heatOnPins[i], OUTPUT);
-    thermistorInfRs[i] = ( thermistorInfRs[i]*exp(-thermistorBetas[i]/(25.0 - ABS_ZERO)) );
+    thermistorRAt25[i] = ( thermistorRAt25[i]*exp(-thermistorBetas[i]/(25.0 - ABS_ZERO)) );
     tempSum[i] = 0;
   }
 
@@ -225,6 +230,16 @@ void Platform::Init()
   longWait = lastTime;
   
   active = true;
+}
+
+void Platform::SetSlowestDrive()
+{
+	slowestDrive = 0;
+	for(int8_t drive = 1; drive < DRIVES; drive++)
+	{
+		if(InstantDv(drive) < InstantDv(slowestDrive))
+			slowestDrive = drive;
+	}
 }
 
 void Platform::InitZProbe()
@@ -293,10 +308,10 @@ void Platform::InitialiseInterrupts()
   SetInterrupt(STANDBY_INTERRUPT_RATE);
 }
 
-void Platform::DisableInterrupts()
-{
-	NVIC_DisableIRQ(TC3_IRQn);
-}
+//void Platform::DisableInterrupts()
+//{
+//	NVIC_DisableIRQ(TC3_IRQn);
+//}
 
 
 //*************************************************************************************************
@@ -306,7 +321,9 @@ void Platform::Diagnostics()
   Message(HOST_MESSAGE, "Platform Diagnostics:\n"); 
 }
 
-// Print memory stats to USB and append them to the current webserver reply
+// Print memory stats to USB and append them to the current webserver reply, and
+// give the main loop timing stats.
+
 void Platform::PrintMemoryUsage()
 {
 	const char *ramstart=(char *)0x20070000;
@@ -314,31 +331,26 @@ void Platform::PrintMemoryUsage()
     const char *heapend=sbrk(0);
 	register const char * stack_ptr asm ("sp");
 	const struct mallinfo mi = mallinfo();
-	Message(HOST_MESSAGE, "\n");
-	Message(HOST_MESSAGE, "Memory usage:\n\n");
+	Message(BOTH_MESSAGE, "\n");
+	AppendMessage(BOTH_MESSAGE, "Memory usage:\n\n");
 	snprintf(scratchString, STRING_LENGTH, "Program static ram used: %d\n", &_end - ramstart);
-	reprap.GetWebserver()->AppendReply(scratchString);
-	Message(HOST_MESSAGE, scratchString);
+	AppendMessage(BOTH_MESSAGE, scratchString);
 	snprintf(scratchString, STRING_LENGTH, "Dynamic ram used: %d\n", mi.uordblks);
-	reprap.GetWebserver()->AppendReply(scratchString);
-	Message(HOST_MESSAGE, scratchString);
+	AppendMessage(BOTH_MESSAGE, scratchString);
 	snprintf(scratchString, STRING_LENGTH, "Recycled dynamic ram: %d\n", mi.fordblks);
-	reprap.GetWebserver()->AppendReply(scratchString);
-	Message(HOST_MESSAGE, scratchString);
+	AppendMessage(BOTH_MESSAGE, scratchString);
 	snprintf(scratchString, STRING_LENGTH, "Current stack ram used: %d\n", ramend - stack_ptr);
-	reprap.GetWebserver()->AppendReply(scratchString);
-	Message(HOST_MESSAGE, scratchString);
+	AppendMessage(BOTH_MESSAGE, scratchString);
 	const char* stack_lwm = heapend;
 	while (stack_lwm < stack_ptr && *stack_lwm == memPattern)
 	{
 		++stack_lwm;
 	}
 	snprintf(scratchString, STRING_LENGTH, "Maximum stack ram used: %d\n", ramend - stack_lwm);
-	reprap.GetWebserver()->AppendReply(scratchString);
-	Message(HOST_MESSAGE, scratchString);
+	AppendMessage(BOTH_MESSAGE, scratchString);
 	snprintf(scratchString, STRING_LENGTH, "Never used ram: %d\n", stack_lwm - heapend);
-	reprap.GetWebserver()->AppendReply(scratchString);
-	Message(HOST_MESSAGE, scratchString);
+	AppendMessage(BOTH_MESSAGE, scratchString);
+	reprap.Timing();
 }
 
 void Platform::ClassReport(char* className, float &lastTime)
@@ -369,7 +381,6 @@ void Platform::ClassReport(char* className, float &lastTime)
 // then the thermistor resistance, R = V.RS/(1024 - V)
 // and the temperature, T = BETA/ln(R/R_INF)
 // To get degrees celsius (instead of kelvin) add -273.15 to T
-//#define THERMISTOR_R_INFS ( THERMISTOR_25_RS*exp(-THERMISTOR_BETAS/298.15) ) // Compute in Platform constructor
 
 // Result is in degrees celsius
 
@@ -386,7 +397,7 @@ float Platform::GetTemperature(int8_t heater)
 //	  return ABS_ZERO;
 //  }
   float r = (float)rawTemp + 0.5;
-  r = ABS_ZERO + thermistorBetas[heater]/log( (r*thermistorSeriesRs[heater]/((AD_RANGE + 1) - r))/thermistorInfRs[heater] );
+  r = ABS_ZERO + thermistorBetas[heater]/log( (r*thermistorSeriesRs[heater]/((AD_RANGE + 1) - r))/thermistorRAt25[heater] );
   return r;
 }
 
@@ -660,6 +671,7 @@ bool FileStore::Open(const char* directory, const char* fileName, bool write)
 
   writing = write;
   lastBufferEntry = FILE_BUF_LEN - 1;
+  bytesRead = 0;
   FRESULT openReturn;
 
   if(writing)
@@ -729,6 +741,14 @@ unsigned long FileStore::Length()
 	return 0;
 }
 
+float FileStore::FractionRead()
+{
+	unsigned long len = Length();
+	if(len <= 0)
+		return 0.0;
+	return (float)bytesRead/(float)len;
+}
+
 int8_t FileStore::Status()
 {
   if(!inUse)
@@ -773,7 +793,7 @@ bool FileStore::Read(char& b)
 
   b = (char)buf[bufferPointer];
   bufferPointer++;
-
+  bytesRead++;
   return true;
 }
 
@@ -858,32 +878,114 @@ void Platform::ReturnFileStore(FileStore* fs)
 
 void Platform::Message(char type, const char* message)
 {
-  switch(type)
-  {
-  case FLASH_LED:
-  // Message that is to flash an LED; the next two bytes define 
-  // the frequency and M/S ratio.
-  
-    break;
-  
-  case DISPLAY_MESSAGE:  
-  // Message that is to appear on a local display;  \f and \n should be supported.
-  case HOST_MESSAGE:
-  default:
-  
-//    FileStore* m = GetFileStore(GetWebDir(), MESSAGE_FILE, true);
-//    if(m != NULL)
-//    {
-//    	m->GoToEnd();
-//    	m->Write(message);
-//    	m->Close();
-//    } else
-//    	line->Write("Can't open message file.\n");
-	for(uint8_t i = 0; i < messageIndent; i++)
-		line->Write(' ');
-    line->Write(message);
-  }
+	switch(type)
+	{
+	case FLASH_LED:
+		// Message that is to flash an LED; the next two bytes define
+		// the frequency and M/S ratio.
+
+		break;
+
+	case DISPLAY_MESSAGE:
+		// Message that is to appear on a local display;  \f and \n should be supported.
+
+		break;
+
+	case HOST_MESSAGE:
+		// Message that is to be sent to the host via USB; the H is not sent.
+		for(uint8_t i = 0; i < messageIndent; i++)
+			line->Write(' ');
+		line->Write(message);
+		break;
+
+	case WEB_MESSAGE:
+		// Message that is to be sent to the web
+		reprap.GetWebserver()->MessageStringToWebInterface(message, false);
+		break;
+
+	case WEB_ERROR_MESSAGE:
+		// Message that is to be sent to the web - flags an error
+		reprap.GetWebserver()->MessageStringToWebInterface(message, true);
+		break;
+
+	case BOTH_MESSAGE:
+		// Message that is to be sent to the web & host
+		for(uint8_t i = 0; i < messageIndent; i++)
+			line->Write(' ');
+		line->Write(message);
+		reprap.GetWebserver()->MessageStringToWebInterface(message, false);
+		break;
+
+	case BOTH_ERROR_MESSAGE:
+		// Message that is to be sent to the web & host - flags an error
+		// Make this the default behaviour too.
+
+	default:
+		for(uint8_t i = 0; i < messageIndent; i++)
+			line->Write(' ');
+		line->Write(message);
+		reprap.GetWebserver()->MessageStringToWebInterface(message, true);
+		break;
+
+
+	}
 }
+
+void Platform::AppendMessage(char type, const char* message)
+{
+	switch(type)
+	{
+	case FLASH_LED:
+		// Message that is to flash an LED; the next two bytes define
+		// the frequency and M/S ratio.
+
+		break;
+
+	case DISPLAY_MESSAGE:
+		// Message that is to appear on a local display;  \f and \n should be supported.
+
+		break;
+
+	case HOST_MESSAGE:
+		// Message that is to be sent to the host via USB; the H is not sent.
+		for(uint8_t i = 0; i < messageIndent; i++)
+			line->Write(' ');
+		line->Write(message);
+		break;
+
+	case WEB_MESSAGE:
+		// Message that is to be sent to the web
+		reprap.GetWebserver()->AppendReplyToWebInterface(message, false);
+		break;
+
+	case WEB_ERROR_MESSAGE:
+		// Message that is to be sent to the web - flags an error
+		reprap.GetWebserver()->AppendReplyToWebInterface(message, true);
+		break;
+
+	case BOTH_MESSAGE:
+		// Message that is to be sent to the web & host
+		for(uint8_t i = 0; i < messageIndent; i++)
+			line->Write(' ');
+		line->Write(message);
+		reprap.GetWebserver()->AppendReplyToWebInterface(message, false);
+		break;
+
+	case BOTH_ERROR_MESSAGE:
+		// Message that is to be sent to the web & host - flags an error
+		// Make this the default behaviour too.
+
+	default:
+		for(uint8_t i = 0; i < messageIndent; i++)
+			line->Write(' ');
+		line->Write(message);
+		reprap.GetWebserver()->AppendReplyToWebInterface(message, true);
+		break;
+
+
+	}
+}
+
 
 void Platform::SetPidValues(size_t heater, float pVal, float iVal, float dVal)
 {

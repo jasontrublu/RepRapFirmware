@@ -28,7 +28,7 @@ Licence: GPL
 class PID
 {
   friend class Heat;
-  private:
+  protected:
   
     PID(Platform* p, int8_t h);
     void Init();									// (Re)Set everything to start
@@ -41,8 +41,13 @@ class PID
     void Standby();									// Switch from active to idle
     bool Active();									// Are we active?
     void SwitchOff();								// Not even standby - all heater power off
+    bool SwitchedOff();								// Are we switched off?
     void ResetFault();								// Reset a fault condition - only call this if you know what you are doing
     float GetTemperature();							// Get the current temperature
+
+  private:
+
+    void SwitchOn();
   
     Platform* platform;								// The instance of the class that is the RepRap hardware
     float activeTemperature;						// The required active temperature
@@ -56,6 +61,8 @@ class PID
     int8_t heater;									// The index of our heater
     int8_t badTemperatureCount;						// Count of sequential dud readings
     bool temperatureFault;							// Has our heater developed a fault?
+    float timeSetHeating;							// When we were switched on
+    bool heatingUp;									// Are we heating up?
 };
 
 /**
@@ -78,6 +85,7 @@ class Heat
     void Activate(int8_t heater);								// Turn on a heater
     void Standby(int8_t heater);								// Set a heater idle
     float GetTemperature(int8_t heater);						// Get the temperature of a heater
+    bool SwitchedOff(int8_t heater);						    // Is this heater in use?
     void ResetFault(int8_t heater);								// Reset a heater fault - only call this if you know what you are doing
     bool AllHeatersAtSetTemperatures();							// Is everything at temperature within tolerance?
     bool HeaterAtSetTemperature(int8_t heater);					// Is a specific heater at temperature within tolerance?
@@ -105,7 +113,7 @@ inline bool PID::Active()
 
 inline void PID::SetActiveTemperature(const float& t)
 {
-  switchedOff = false;
+  SwitchOn();
   activeTemperature = t;
 }
 
@@ -116,7 +124,7 @@ inline float PID::GetActiveTemperature()
 
 inline void PID::SetStandbyTemperature(const float& t)
 {
-  switchedOff = false;
+  SwitchOn();
   standbyTemperature = t;
 }
 
@@ -132,14 +140,20 @@ inline float PID::GetTemperature()
 
 inline void PID::Activate()
 {
-  switchedOff = false;
+  SwitchOn();
   active = true;
+  if(!heatingUp)
+	  timeSetHeating = platform->Time();
+  heatingUp = activeTemperature > temperature;
 }
 
 inline void PID::Standby()
 {
-  switchedOff = false;
+  SwitchOn();
   active = false;
+  if(!heatingUp)
+	  timeSetHeating = platform->Time();
+  heatingUp = standbyTemperature > temperature;
 }
 
 inline void PID::ResetFault()
@@ -153,11 +167,23 @@ inline void PID::SwitchOff()
 	platform->SetHeater(heater, 0.0);
 	active = false;
 	switchedOff = true;
+	heatingUp = false;
+}
+
+
+inline bool PID::SwitchedOff()
+{
+	return switchedOff;
 }
 
 //**********************************************************************************
 
 // Heat
+
+inline bool Heat::SwitchedOff(int8_t heater)
+{
+	return pids[heater]->SwitchedOff();
+}
 
 inline void Heat::SetActiveTemperature(int8_t heater, const float& t)
 {
