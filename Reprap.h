@@ -32,13 +32,26 @@ class RepRap
     void Exit();
     void Interrupt();
     void Diagnostics();
-    bool Debug();
+    void Timing();
+    bool Debug() const;
     void SetDebug(bool d);
-    Platform* GetPlatform();
-    Move* GetMove();
-    Heat* GetHeat();
-    GCodes* GetGCodes();
-    Webserver* GetWebserver();  
+    void AddTool(Tool* t);
+    void SelectTool(int toolNumber);
+    void StandbyTool(int toolNumber);
+    Tool* GetCurrentTool();
+    Tool* GetTool(int toolNumber);
+    void SetToolVariables(int toolNumber, float* standbyTemperatures, float* activeTemperatures);
+    void AllowColdExtrude();
+    void DenyColdExtrude();
+    bool ColdExtrude();
+    void PrintTool(int toolNumber, char* reply);
+	void FlagTemperatureFault(int8_t dudHeater);
+	void ClearTemperatureFault(int8_t wasDudHeater);
+    Platform* GetPlatform() const;
+    Move* GetMove() const;
+    Heat* GetHeat() const;
+    GCodes* GetGCodes() const;
+    Webserver* GetWebserver() const;
     
   private:
   
@@ -48,28 +61,52 @@ class RepRap
     Heat* heat;
     GCodes* gCodes;
     Webserver* webserver;
+    Tool* toolList;
+    Tool* currentTool;
     bool debug;
+    float fastLoop, slowLoop;
+    float lastTime;
+    bool coldExtrude;
 };
 
-inline Platform* RepRap::GetPlatform() { return platform; }
-inline Move* RepRap::GetMove() { return move; }
-inline Heat* RepRap::GetHeat() { return heat; }
-inline GCodes* RepRap::GetGCodes() { return gCodes; }
-inline Webserver* RepRap::GetWebserver() { return webserver; }
-inline bool RepRap::Debug() { return debug; }
+inline Platform* RepRap::GetPlatform() const { return platform; }
+inline Move* RepRap::GetMove() const { return move; }
+inline Heat* RepRap::GetHeat() const { return heat; }
+inline GCodes* RepRap::GetGCodes() const { return gCodes; }
+inline Webserver* RepRap::GetWebserver() const { return webserver; }
+inline bool RepRap::Debug() const { return debug; }
+inline Tool* RepRap::GetCurrentTool() { return currentTool; }
+inline bool RepRap::ColdExtrude() { return coldExtrude; }
+inline void RepRap::AllowColdExtrude() { coldExtrude = true; }
+
+inline void RepRap::FlagTemperatureFault(int8_t dudHeater)
+{
+	if(toolList != NULL)
+		toolList->FlagTemperatureFault(dudHeater);
+}
+
+inline void RepRap::ClearTemperatureFault(int8_t wasDudHeater)
+{
+	reprap.GetHeat()->ResetFault(wasDudHeater);
+	if(toolList != NULL)
+		toolList->ClearTemperatureFault(wasDudHeater);
+}
 
 inline void RepRap::SetDebug(bool d)
 {
 	debug = d;
 	if(debug)
 	{
-		platform->Message(HOST_MESSAGE, "Debugging enabled\n");
+		platform->Message(BOTH_MESSAGE, "Debugging enabled\n");
 		platform->PrintMemoryUsage();
+	}
+	else
+	{
+		platform->Message(WEB_MESSAGE, "");
 	}
 }
 
 inline void RepRap::Interrupt() { move->Interrupt(); }
-
 
 #endif
 
