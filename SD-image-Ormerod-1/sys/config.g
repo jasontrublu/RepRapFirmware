@@ -13,6 +13,7 @@ G21                                 ; Work in millimetres
 G90                                 ; Send absolute corrdinates...
 M83                                 ; ...but relative extruder moves
 M906 X800 Y1000 Z800 E800           ; Set motor currents (mA)
+M569 P0 S0							; Reverse the X motor
 M92 E420                            ; Set extruder steps per mm
 M558 P1                             ; Use an unmodulated Z probe
 G31 Z2.6 P660                       ; Set the probe height and threshold
