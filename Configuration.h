@@ -3,7 +3,7 @@
 RepRapFirmware - Configuration
 
 This is where all machine-independent configuration and other definitions are set up.  Nothing that
-depends on any particular RepRap, RepRap component, or RepRap controller  should go in here.  Define 
+depends on any particular RepRap, RepRap component, or RepRap controller should go in here.  Define
 machine-dependent things in Platform.h
 
 -----------------------------------------------------------------------------------------------------
@@ -24,8 +24,8 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "0.90"
-#define DATE "2014-08-18"
+#define VERSION "1.04"
+#define DATE "2015-02-02"
 #define LAST_AUTHOR "reprappro"
 
 // Other firmware that we might switch to be compatible with.
@@ -48,6 +48,10 @@ enum Compatibility
 
 #define HEAT_SAMPLE_TIME (0.5) // Seconds
 
+#define HEAT_PWM_AVERAGE_TIME (5.0) // Seconds
+
+#define INV_HEAT_PWM_AVERAGE_COUNT (HEAT_SAMPLE_TIME/HEAT_PWM_AVERAGE_TIME)
+
 #define TEMPERATURE_CLOSE_ENOUGH (3.0) 		// Celsius
 #define TEMPERATURE_LOW_SO_DONT_CARE (40.0)	// Celsius
 #define HOT_ENOUGH_TO_EXTRUDE (170.0)       // Celsius
@@ -57,7 +61,7 @@ enum Compatibility
 // nasty has happened.
 
 #define MAX_BAD_TEMPERATURE_COUNT 6
-#define BAD_LOW_TEMPERATURE -10.0
+#define BAD_LOW_TEMPERATURE -15.0
 #define BAD_HIGH_TEMPERATURE 300.0
 
 #define STANDBY_INTERRUPT_RATE 2.0e-4 // Seconds
@@ -76,7 +80,6 @@ enum Compatibility
 #define MESSAGE_FILE "messages.txt"
 #define FOUR04_FILE "html404.htm"
 #define CONFIG_FILE "config.g"         // The file that sets the machine's parameters
-//#define DEFAULT_FILE "default.g"       // If the config file isn't found
 #define HOME_X_G "homex.g"
 #define HOME_Y_G "homey.g"
 #define HOME_Z_G "homez.g"

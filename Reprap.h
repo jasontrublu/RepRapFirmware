@@ -40,11 +40,12 @@ class RepRap
     void StandbyTool(int toolNumber);
     Tool* GetCurrentTool();
     Tool* GetTool(int toolNumber);
-    void SetToolVariables(int toolNumber, float* standbyTemperatures, float* activeTemperatures);
+    //void SetToolVariables(int toolNumber, float* standbyTemperatures, float* activeTemperatures, float* offsets);
     void AllowColdExtrude();
     void DenyColdExtrude();
     bool ColdExtrude();
     void PrintTool(int toolNumber, char* reply);
+    void PrintTools(char* reply);
 	void FlagTemperatureFault(int8_t dudHeater);
 	void ClearTemperatureFault(int8_t wasDudHeater);
     Platform* GetPlatform() const;

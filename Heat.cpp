@@ -66,11 +66,11 @@ void Heat::Diagnostics()
   // TODO - Put something useful in here
 }
 
-bool Heat::AllHeatersAtSetTemperatures()
+bool Heat::AllHeatersAtSetTemperatures(bool heaters[])
 {
 	for(int8_t heater = 0; heater < HEATERS; heater++)
 	{
-		if(!HeaterAtSetTemperature(heater))
+		if(heaters[heater] && (!HeaterAtSetTemperature(heater)))
 			return false;
 	}
 	return true;
@@ -124,6 +124,7 @@ void PID::Init()
   active = false; 		// Default to standby temperature
   switchedOff = true;
   heatingUp = false;
+  averagePWM = 0.0;
 }
 
 void PID::SwitchOn()
@@ -152,6 +153,7 @@ void PID::Spin()
   if(temperatureFault || switchedOff)
   {
 	  platform->SetHeater(heater, 0.0); // Make sure...
+	  averagePWM = averagePWM*(1.0 - INV_HEAT_PWM_AVERAGE_COUNT);
 	  return;
   }
 
@@ -204,7 +206,15 @@ void PID::Spin()
   
   if(!platform->UsePID(heater))
   {
-    platform->SetHeater(heater, (error > 0.0) ? 1.0 : 0.0);
+	if(error > 0.0)
+	{
+		platform->SetHeater(heater, 1.0);
+		averagePWM = averagePWM*(1.0 - INV_HEAT_PWM_AVERAGE_COUNT) + 1.0;
+	} else
+	{
+		platform->SetHeater(heater, 0.0);
+		averagePWM = averagePWM*(1.0 - INV_HEAT_PWM_AVERAGE_COUNT);
+	}
     return; 
   }
   
@@ -212,6 +222,7 @@ void PID::Spin()
   {
      temp_iState = 0.0;
      platform->SetHeater(heater, 0.0);
+     averagePWM = averagePWM*(1.0 - INV_HEAT_PWM_AVERAGE_COUNT);
      lastTemperature = temperature;
      return;
   }
@@ -219,6 +230,7 @@ void PID::Spin()
   {
      temp_iState = 0.0;
      platform->SetHeater(heater, 1.0);
+     averagePWM = averagePWM*(1.0 - INV_HEAT_PWM_AVERAGE_COUNT) + 1.0;
      lastTemperature = temperature;
      return;
   }  
@@ -243,6 +255,8 @@ void PID::Spin()
 
   if(!temperatureFault)
 	  platform->SetHeater(heater, result);
+
+  averagePWM = averagePWM*(1.0 - INV_HEAT_PWM_AVERAGE_COUNT) + result;
 
 //  char buffer[100];
 //  snprintf(buffer, ARRAY_SIZE(buffer), "Heat: e=%f, P=%f, I=%f, d=%f, r=%f\n", error, platform->PidKp(heater)*error, temp_iState, temp_dState, result);

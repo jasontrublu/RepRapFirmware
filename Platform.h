@@ -83,8 +83,8 @@ Licence: GPL
 #define BACKWARDS (!FORWARDS) // ...in each direction
 #define DIRECTIONS {FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS} // What each axis needs to make it go forwards - defaults
 #define ENABLE_PINS {29, 27, X1, X0, 37, X8, 50, 47}
-#define ENABLE false // What to send to enable...
-#define DISABLE true // ...and disable a drive
+#define ENABLE_DRIVE false // What to send to enable...
+#define DISABLE_DRIVE true // ...and disable a drive
 #define DISABLE_DRIVES {false, false, true, false, false, false, false, false} // Set true to disable a drive when it becomes idle
 #define LOW_STOP_PINS {11, -1, 60, 31, 24, 46, 45, 44} //E Stops not currently used
 #define HIGH_STOP_PINS {-1, 28, -1, -1, -1, -1, -1, -1}
@@ -99,7 +99,8 @@ Licence: GPL
 #define Z_PROBE_AD_VALUE (400) // Default for the Z probe - should be overwritten by experiment
 #define Z_PROBE_STOP_HEIGHT (0.7) // mm
 #define Z_PROBE_PIN (10) 						// Analogue pin number
-#define Z_PROBE_MOD_PIN (52)					// Digital pin number to turn the IR LED on (high) or off (low)
+#define Z_PROBE_MOD_PIN07 (X25)					// Digital pin number to turn the IR LED on (high) or off (low) Duet V0.7 onwards
+#define Z_PROBE_MOD_PIN (52)
 #define MAX_FEEDRATES {100.0, 100.0, 3.0, 20.0, 20.0, 20.0, 20.0, 20.0} // mm/sec
 #define ACCELERATIONS {500.0, 500.0, 20.0, 250.0, 250.0, 250.0, 250.0, 250.0} // mm/sec^2
 #define DRIVE_STEPS_PER_UNIT {87.4890, 87.4890, 4000.0, 420.0, 420.0, 420.0, 420.0, 420.0}
@@ -114,7 +115,7 @@ Licence: GPL
 
 // AXES
 
-#define AXIS_LENGTHS {220, 200, 200} 			// mm
+#define AXIS_LENGTHS {230, 200, 200} 			// mm
 #define HOME_FEEDRATES {50.0, 50.0, 1.0} 		// mm/sec
 #define HEAD_OFFSETS {0.0, 0.0, 0.0}			// mm
 
@@ -131,14 +132,14 @@ Licence: GPL
 #define THERMISTOR_BETAS {3988.0, 4138.0, 4138.0, 4138.0, 4138.0, 4138.0} // Bed thermistor: B57861S104F40; Extruder thermistor: RS 198-961
 #define THERMISTOR_SERIES_RS {1000, 1000, 1000, 1000, 1000, 1000} // Ohms in series with the thermistors
 #define THERMISTOR_25_RS {10000.0, 100000.0, 100000.0, 100000.0, 100000.0, 100000.0} // Thermistor ohms at 25 C = 298.15 K
-#define USE_PID {false, true, true, true, true, true} // PID or bang-bang for this heater?
+#define USE_PIDS {false, true, true, true, true, true} // PID or bang-bang for this heater?
 #define PID_KIS { 2.2, 0.5 / HEAT_SAMPLE_TIME, 0.5 / HEAT_SAMPLE_TIME, 0.5 / HEAT_SAMPLE_TIME, 0.5 / HEAT_SAMPLE_TIME, 0.5 / HEAT_SAMPLE_TIME} // Integral PID constants, adjusted by ab for Ormerod hot end
 #define PID_KDS {80, 100 * HEAT_SAMPLE_TIME, 100 * HEAT_SAMPLE_TIME, 100 * HEAT_SAMPLE_TIME, 100 * HEAT_SAMPLE_TIME, 100 * HEAT_SAMPLE_TIME}// Derivative PID constants
 #define PID_KPS {12, 20, 20, 20, 20, 20} // Proportional PID constants
-#define FULL_PID_BAND {150, 150.0, 150.0, 150.0, 150.0, 150.0} // errors larger than this cause heater to be on or off and I-term set to zero
-#define PID_MIN {0.0, 0.0, 0.0, 0.0, 0.0, 0.0} // minimum value of I-term
-#define PID_MAX {180, 180, 180, 180, 180, 180} // maximum value of I-term, must be high enough to reach 245C for ABS printing
-#define D_MIX {0.5, 0.5, 0.5, 0.5, 0.5, 0.5} // higher values make the PID controller less sensitive to noise in the temperature reading, but too high makes it unstable
+#define FULL_PID_BANDS {150, 150.0, 150.0, 150.0, 150.0, 150.0} // errors larger than this cause heater to be on or off and I-term set to zero
+#define PID_MINS {0.0, 0.0, 0.0, 0.0, 0.0, 0.0} // minimum value of I-term
+#define PID_MAXES {180, 180, 180, 180, 180, 180} // maximum value of I-term, must be high enough to reach 245C for ABS printing
+#define D_MIXES {0.5, 0.5, 0.5, 0.5, 0.5, 0.5} // higher values make the PID controller less sensitive to noise in the temperature reading, but too high makes it unstable
 #define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
 #define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO}
 #define COOLING_FAN_PIN X6 //pin D34 is PWM capable but not an Arduino PWM pin - use X6 instead
@@ -287,6 +288,9 @@ public:
 	void ConnectionError(void* h);			 // Called when a network error has occured
 	bool Active() const;					 // Is the network connection live?
 	bool LinkIsUp();						 // Is the network link up?
+	void Enable();
+	void Disable();
+	bool Enabled();
 
 friend class Platform;
 
@@ -307,6 +311,7 @@ private:
 	int outputPointer;
 	bool writeEnabled;
 	bool closePending;
+	bool enabled;
 	int8_t status;
 	NetRing* netRingGetPointer;
 	NetRing* netRingAddPointer;
@@ -465,6 +470,9 @@ class Platform
   
   MassStorage* GetMassStorage();
   FileStore* GetFileStore(const char* directory, const char* fileName, bool write);
+  void EnableNetwork();
+  void DisableNetwork();
+  bool NetworkEnabled();
   void StartNetwork();
   const char* GetWebDir() const; // Where the htm etc files are
   const char* GetGCodeDir() const; // Where the gcodes are
@@ -515,6 +523,12 @@ class Platform
   void SetZProbe(int iZ);
   void SetZProbeType(int iZ);
   int GetZProbeType() const;
+
+  void SetExtrusionAncilliaryPWM(float v);
+  float GetExtrusionAncilliaryPWM();
+  void ExtrudeOn();
+  void ExtrudeOff();
+
   //Mixing support
  // void SetMixingDrives(int);
  // int GetMixingDrives();
@@ -599,7 +613,9 @@ class Platform
   int zProbeADValue;
   float zProbeStopHeight;
   bool zProbeEnable;
-  int8_t numMixingDrives;
+  //int8_t numMixingDrives;
+
+  float extrusionAncilliaryPWM;
 
 // AXES
 
@@ -621,14 +637,14 @@ class Platform
   float thermistorBetas[HEATERS];
   float thermistorSeriesRs[HEATERS];
   float thermistorRAt25[HEATERS];
-  bool usePID[HEATERS];
+  bool usePIDs[HEATERS];
   float pidKis[HEATERS];
   float pidKds[HEATERS];
   float pidKps[HEATERS];
-  float fullPidBand[HEATERS];
-  float pidMin[HEATERS];
-  float pidMax[HEATERS];
-  float dMix[HEATERS];
+  float fullPidBands[HEATERS];
+  float pidMins[HEATERS];
+  float pidMaxes[HEATERS];
+  float dMixes[HEATERS];
   float heatSampleTime;
   float standbyTemperatures[HEATERS];
   float activeTemperatures[HEATERS];
@@ -838,9 +854,9 @@ inline void Platform::Disable(byte drive)
 	if(enablePins[drive] < 0)
 		  return;
 	if(drive == Z_AXIS || drive==E0_DRIVE || drive==E2_DRIVE) //ENABLE_PINS {29, 27, X1, X0, 37, X8, 50, 47}
-		digitalWriteNonDue(enablePins[drive], DISABLE);
+		digitalWriteNonDue(enablePins[drive], DISABLE_DRIVE);
 	else
-		digitalWrite(enablePins[drive], DISABLE);
+		digitalWrite(enablePins[drive], DISABLE_DRIVE);
 	driveEnabled[drive] = false;
 }
 
@@ -851,9 +867,9 @@ inline void Platform::Step(byte drive)
 	if(!driveEnabled[drive] && enablePins[drive] >= 0)
 	{
 		if(drive == Z_AXIS || drive==E0_DRIVE || drive==E2_DRIVE) //ENABLE_PINS {29, 27, X1, X0, 37, X8, 50, 47}
-			digitalWriteNonDue(enablePins[drive], ENABLE);
+			digitalWriteNonDue(enablePins[drive], ENABLE_DRIVE);
 		else
-			digitalWrite(enablePins[drive], ENABLE);
+			digitalWrite(enablePins[drive], ENABLE_DRIVE);
 		driveEnabled[drive] = true;
 	}
 	if(drive == E0_DRIVE || drive == E3_DRIVE) //STEP_PINS {14, 25, 5, X2, 41, 39, X4, 49}
@@ -935,11 +951,14 @@ inline void Platform::PollZHeight()
 	else
 		zProbeOffSum = zProbeOffSum + currentReading - zProbeOffSum/NUMBER_OF_A_TO_D_READINGS_AVERAGED;
 
-	if (zProbeType == 2)
+	if (zProbeType >= 2)
 	{
 		zModOnThisTime = !zModOnThisTime;
 		// Reverse the modulation, ready for next time
-		digitalWrite(zProbeModulationPin, zModOnThisTime ? HIGH : LOW);
+		if(zProbeType == 3)
+			digitalWriteNonDue(zProbeModulationPin, zModOnThisTime ? HIGH : LOW);
+		else
+			digitalWrite(zProbeModulationPin, zModOnThisTime ? HIGH : LOW);
 	} else
 		zModOnThisTime = true; // Defensive...
 }
@@ -948,7 +967,7 @@ inline int Platform::ZProbe() const
 {
 	return (zProbeType == 1)
 			? zProbeOnSum/NUMBER_OF_A_TO_D_READINGS_AVERAGED		// non-modulated mode
-			: (zProbeType == 2)
+			: (zProbeType == 2 || zProbeType == 3)
 			  ? (zProbeOnSum - zProbeOffSum)/NUMBER_OF_A_TO_D_READINGS_AVERAGED	// modulated mode
 			    : 0;														// z-probe disabled
 }
@@ -957,7 +976,7 @@ inline int Platform::ZProbeOnVal() const
 {
 	return (zProbeType == 1)
 			? zProbeOnSum/NUMBER_OF_A_TO_D_READINGS_AVERAGED
-			: (zProbeType == 2)
+			: (zProbeType == 2 || zProbeType == 3)
 			  ? zProbeOnSum/NUMBER_OF_A_TO_D_READINGS_AVERAGED
 				: 0;
 }
@@ -979,13 +998,42 @@ inline void Platform::SetZProbe(int iZ)
 
 inline void Platform::SetZProbeType(int pt)
 {
-	zProbeType = (pt >= 0 && pt <= 2) ? pt : 0;
+	zProbeType = (pt >= 0 && pt <= 3) ? pt : 0;
+	if(zProbeType == 3)
+	{
+		zProbeModulationPin = Z_PROBE_MOD_PIN07;
+	}else
+	{
+		zProbeModulationPin = Z_PROBE_MOD_PIN;
+	}
 	InitZProbe();
 }
 
 inline int Platform::GetZProbeType() const
 {
 	return zProbeType;
+}
+
+inline void Platform::SetExtrusionAncilliaryPWM(float v)
+{
+	extrusionAncilliaryPWM = v;
+}
+
+inline float Platform::GetExtrusionAncilliaryPWM()
+{
+	return extrusionAncilliaryPWM;
+}
+
+// For the Duet we use the fan output for this
+
+inline void Platform::ExtrudeOn()
+{
+	CoolingFan(extrusionAncilliaryPWM);
+}
+
+inline void Platform::ExtrudeOff()
+{
+	CoolingFan(0.0);
 }
 
 //********************************************************************************************************
@@ -1019,7 +1067,7 @@ inline void Platform::SetHeatSampleTime(float st)
 
 inline bool Platform::UsePID(int8_t heater) const
 {
-  return usePID[heater];
+  return usePIDs[heater];
 }
 
 
@@ -1040,22 +1088,22 @@ inline float Platform::PidKp(int8_t heater) const
 
 inline float Platform::FullPidBand(int8_t heater) const
 {
-  return fullPidBand[heater];
+  return fullPidBands[heater];
 }
 
 inline float Platform::PidMin(int8_t heater) const
 {
-  return pidMin[heater];  
+  return pidMins[heater];  
 }
 
 inline float Platform::PidMax(int8_t heater) const
 {
-  return pidMax[heater];
+  return pidMaxes[heater];
 }
 
 inline float Platform::DMix(int8_t heater) const
 {
-  return dMix[heater];  
+  return dMixes[heater];  
 }
 
 
@@ -1149,6 +1197,21 @@ inline void Platform::SetInterrupt(float s) // Seconds
 inline Network* Platform::GetNetwork()
 {
 	return network;
+}
+
+inline void Platform::EnableNetwork()
+{
+	network->Enable();
+}
+
+inline void Platform::DisableNetwork()
+{
+	network->Disable();
+}
+
+inline bool Platform::NetworkEnabled()
+{
+	return network->Enabled();
 }
 
 inline void Platform::SetIPAddress(byte ip[])
@@ -1262,6 +1325,20 @@ inline bool Network::Active() const
 	return active;
 }
 
+inline void Network::Enable()
+{
+	enabled = true;
+}
+
+inline void Network::Disable()
+{
+	enabled = false;
+}
+
+inline bool Network::Enabled()
+{
+	return enabled;
+}
 
 
 #endif
