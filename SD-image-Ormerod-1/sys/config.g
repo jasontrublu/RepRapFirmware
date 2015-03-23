@@ -7,22 +7,22 @@
 ; want to keep from your old file.
 ; 
 M111 S0                             ; Debug off
-M550 PMy RepRapPro Ormerod 1        ; Machine name (can be anything you like)
+M550 POmerod Jason                  ; Machine name (can be anything you like)
 M551 Preprap                        ; Machine password (currently not used)
 M540 P0xBE:0xEF:0xDE:0xAD:0xFE:0xED ; MAC Address
-M552 P192.168.1.14                  ; IP address
+M552 P192.168.178.130               ; IP address
 M553 P255.255.255.0                 ; Netmask
-M554 P192.168.1.1                   ; Gateway
+M554 P192.168.178.1                 ; Gateway
 M555 P2                             ; Set output to look like Marlin
 G21                                 ; Work in millimetres
 G90                                 ; Send absolute corrdinates...
 M83                                 ; ...but relative extruder moves
 M906 X800 Y1000 Z800 E800           ; Set motor currents (mA)
-;M305 P0 R4700                       ; Set the heated bed thermistor series resistor to 4K7
-;M305 P1 R4700                       ; Set the hot end thermistor series resistor to 4K7
+;M305 P0 R4700                      ; Set the heated bed thermistor series resistor to 4K7
+;M305 P1 R4700                      ; Set the hot end thermistor series resistor to 4K7
 M92 E420                            ; Set extruder steps per mm
 M558 P1                             ; Use an unmodulated Z probe
-G31 Z0.8 P600                       ; Set the probe height and threshold (deliberately too high to avoid bed crashes on initial setup)
+G31 Z2.3 P660                       ; Set the probe height and threshold (deliberately too high to avoid bed crashes on initial setup)
 M556 S78 X0 Y0 Z0                   ; Put your axis compensation here
 M201 X500 Y500 Z15 E500             ; Accelerations (mm/s^2)
 M203 X15000 Y15000 Z100 E3600       ; Maximum speeds (mm/min)
